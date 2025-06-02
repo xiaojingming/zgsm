@@ -63,6 +63,10 @@
 			{
 				"id": "zgsm.terminalMenu",
 				"label": "%extension.displayName%"
+			},
+			{
+				"id": "zgsm.moreDropdownMenu",
+				"label": "More Actions"
 			}
 		],
 		"viewsContainers": {
@@ -118,6 +122,11 @@
 				"command": "zgsm.helpButtonClicked",
 				"title": "%command.documentation.title%",
 				"icon": "$(question)"
+			},
+			{
+				"command": "zgsm.moreButtonClicked",
+				"title": "more",
+				"icon": "$(ellipsis)"
 			},
 			{
 				"command": "zgsm.openInNewTab",
@@ -326,54 +335,14 @@
 			],
 			"view/title": [
 				{
-					"command": "zgsm.plusButtonClicked",
+					"command": "zgsm.settingsButtonClicked",
 					"group": "navigation@1",
 					"when": "view == zgsm.SidebarProvider"
 				},
 				{
-					"command": "zgsm.promptsButtonClicked",
+					"command": "zgsm.moreButtonClicked",
 					"group": "navigation@2",
-					"when": "view == zgsm.SidebarProvider"
-				},
-				{
-					"command": "zgsm.mcpButtonClicked",
-					"group": "navigation@3",
-					"when": "view == zgsm.SidebarProvider"
-				},
-				{
-					"command": "zgsm.historyButtonClicked",
-					"group": "navigation@4",
-					"when": "view == zgsm.SidebarProvider"
-				},
-				{
-					"command": "zgsm.popoutButtonClicked",
-					"group": "navigation@5",
-					"when": "view == zgsm.SidebarProvider"
-				},
-				{
-					"command": "zgsm.settingsButtonClicked",
-					"group": "navigation@6",
-					"when": "view == zgsm.SidebarProvider"
-				},
-				{
-					"command": "zgsm.helpButtonClicked",
-					"group": "navigation@7",
-					"when": "view == zgsm.SidebarProvider"
-				},
-				{
-					"command": "zgsm.view.userHelperDoc",
-					"when": "view == zgsm.view",
-					"group": "navigation"
-				},
-				{
-					"command": "zgsm.view.logout",
-					"when": "view == zgsm.view",
-					"group": "navigation"
-				},
-				{
-					"command": "zgsm.view.issue",
-					"when": "view == zgsm.view",
-					"group": "navigation"
+					"submenu": "zgsm.moreDropdownMenu"
 				}
 			],
 			"editor/title": [
@@ -411,6 +380,16 @@
 					"command": "zgsm.helpButtonClicked",
 					"group": "navigation@7",
 					"when": "activeWebviewPanelId == zgsm.TabPanelProvider"
+				}
+			],
+			"zgsm.moreDropdownMenu": [
+				{
+					"command": "zgsm.terminalAddToContext",
+					"group": "options@1"
+				},
+				{
+					"command": "zgsm.terminalFixCommand",
+					"group": "options@2"
 				}
 			]
 		},
