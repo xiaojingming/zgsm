@@ -93,6 +93,7 @@ export const commandIds = [
 	"historyButtonClicked",
 	"popoutButtonClicked",
 	"settingsButtonClicked",
+	"moreButtonClicked",
 
 	"openInNewTab",
 

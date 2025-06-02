@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useEvent } from "react-use"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 
@@ -15,6 +15,8 @@ import WelcomeView from "./components/welcome/WelcomeView"
 import McpView from "./components/mcp/McpView"
 import PromptsView from "./components/prompts/PromptsView"
 import { HumanRelayDialog } from "./components/human-relay/HumanRelayDialog"
+import { TabContent, TabList, TabTrigger } from "./components/common/Tab"
+import { cn } from "./lib/utils"
 // import { zgsmProviderKey } from "../../src/shared/api"
 
 type Tab = "settings" | "history" | "mcp" | "prompts" | "chat"
@@ -26,6 +28,8 @@ const tabsByMessageAction: Partial<Record<NonNullable<ExtensionMessage["action"]
 	mcpButtonClicked: "mcp",
 	historyButtonClicked: "history",
 }
+
+type ChatTab = "agent" | "review"
 
 const App = () => {
 	const {
@@ -41,6 +45,8 @@ const App = () => {
 
 	const [showAnnouncement, setShowAnnouncement] = useState(false)
 	const [tab, setTab] = useState<Tab>("chat")
+
+	const isChatTab = useMemo(() => tab === "chat", [tab])
 
 	const [humanRelayDialogState, setHumanRelayDialogState] = useState<{
 		isOpen: boolean
@@ -111,6 +117,24 @@ const App = () => {
 	// Tell the extension that we are ready to receive messages.
 	useEffect(() => vscode.postMessage({ type: "webviewDidLaunch" }), [])
 
+	const [activeTab, setActiveTab] = useState<ChatTab>("agent")
+
+	const tabs = [
+		{
+			label: "AGENT",
+			value: "agent",
+		},
+		{
+			label: "CODE REVIEW",
+			value: "review",
+		},
+	]
+
+	const resetTabs = useCallback(() => {
+		setTab("chat")
+		setActiveTab("agent")
+	}, [setTab, setActiveTab])
+
 	if (!didHydrateState) {
 		return null
 	}
@@ -127,12 +151,7 @@ const App = () => {
 			{tab === "settings" && (
 				<SettingsView ref={settingsRef} onDone={() => setTab("chat")} targetSection={currentSection} />
 			)}
-			<ChatView
-				ref={chatViewRef}
-				isHidden={tab !== "chat"}
-				showAnnouncement={showAnnouncement}
-				hideAnnouncement={() => setShowAnnouncement(false)}
-			/>
+
 			<HumanRelayDialog
 				isOpen={humanRelayDialogState.isOpen}
 				requestId={humanRelayDialogState.requestId}
@@ -141,6 +160,51 @@ const App = () => {
 				onSubmit={(requestId, text) => vscode.postMessage({ type: "humanRelayResponse", requestId, text })}
 				onCancel={(requestId) => vscode.postMessage({ type: "humanRelayCancel", requestId })}
 			/>
+
+			{isChatTab && (
+				<div className="header flex items-center justify-between">
+					<TabList
+						value={activeTab}
+						onValueChange={(val) => setActiveTab(val as ChatTab)}
+						className="header-left h-[28px]">
+						{tabs.map((tab) => {
+							const isSelected = activeTab === tab.value
+							const activeTabClass = isSelected ? "border-b border-gray-200" : ""
+
+							return (
+								<TabTrigger
+									key={tab.value}
+									value={tab.value}
+									isSelected={isSelected}
+									className={cn(activeTabClass, "mr-[16px]", "cursor-pointer")}
+									focusNeedRing={false}>
+									{tab.label}
+								</TabTrigger>
+							)
+						})}
+					</TabList>
+
+					<div className="header-right flex absolute right-[12px]">
+						<i
+							className="codicon codicon-add mr-[4px] cursor-pointer p-[2px]"
+							onClick={() => resetTabs()}></i>
+						<i
+							className="codicon codicon-history cursor-pointer p-[2px]"
+							onClick={() => switchTab("history")}></i>
+					</div>
+				</div>
+			)}
+
+			<TabContent>
+				{activeTab === "agent" && (
+					<ChatView
+						ref={chatViewRef}
+						isHidden={tab !== "chat"}
+						showAnnouncement={showAnnouncement}
+						hideAnnouncement={() => setShowAnnouncement(false)}
+					/>
+				)}
+			</TabContent>
 		</>
 	)
 }
