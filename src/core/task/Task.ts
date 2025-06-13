@@ -10,6 +10,7 @@ import { serializeError } from "serialize-error"
 
 // schemas
 import { TokenUsage, ToolUsage, ToolName, ContextCondense } from "../../schemas"
+import { isLanguage } from "../../schemas"
 
 // api
 import { ApiHandler, buildApiHandler } from "../../api"
@@ -33,6 +34,7 @@ import { HistoryItem } from "../../shared/HistoryItem"
 import { ClineAskResponse } from "../../shared/WebviewMessage"
 import { defaultModeSlug } from "../../shared/modes"
 import { DiffStrategy } from "../../shared/tools"
+import { LANGUAGES } from "../../shared/language"
 
 // services
 import { UrlContentFetcher } from "../../services/browser/UrlContentFetcher"
@@ -78,6 +80,7 @@ import { processUserContentMentions } from "../mentions/processUserContentMentio
 import { ApiMessage } from "../task-persistence/apiMessages"
 import { getMessagesSinceLastSummary, summarizeConversation } from "../condense"
 import { maybeRemoveImageBlocks } from "../../api/transform/image-cleaning"
+import { t } from "../../i18n"
 
 export type ClineEvents = {
 	message: [{ action: "created" | "updated"; message: ClineMessage }]
@@ -132,7 +135,11 @@ export class Task extends EventEmitter<ClineEvents> {
 
 	// API
 	readonly apiConfiguration: ProviderSettings
-	api: ApiHandler
+	api: ApiHandler & {
+		setTaskId?: (taskId: string) => void
+		setChatType?: (type: "user" | "system") => void
+		getChatType?: () => "user" | "system"
+	}
 	private lastApiRequestTime?: number
 	private consecutiveAutoApprovedRequestsCount: number = 0
 
@@ -253,6 +260,7 @@ export class Task extends EventEmitter<ClineEvents> {
 
 		if (startTask) {
 			if (task || images) {
+				this.api?.setChatType?.("user")
 				this.startTask(task, images)
 			} else if (historyItem) {
 				this.resumeTaskFromHistory()
@@ -268,6 +276,7 @@ export class Task extends EventEmitter<ClineEvents> {
 		let promise
 
 		if (images || task) {
+			instance.api?.setChatType?.("user")
 			promise = instance.startTask(task, images)
 		} else if (historyItem) {
 			promise = instance.resumeTaskFromHistory()
@@ -351,7 +360,7 @@ export class Task extends EventEmitter<ClineEvents> {
 
 			await this.providerRef.deref()?.updateTaskHistory(historyItem)
 		} catch (error) {
-			console.error("Failed to save Roo messages:", error)
+			console.error("Failed to save Shenma messages:", error)
 		}
 	}
 
@@ -467,10 +476,16 @@ export class Task extends EventEmitter<ClineEvents> {
 		return result
 	}
 
-	async handleWebviewAskResponse(askResponse: ClineAskResponse, text?: string, images?: string[]) {
+	async handleWebviewAskResponse(
+		askResponse: ClineAskResponse,
+		text?: string,
+		images?: string[],
+		chatType?: "system" | "user",
+	) {
 		this.askResponse = askResponse
 		this.askResponseText = text
 		this.askResponseImages = images
+		this.api.setChatType?.(chatType || "system")
 	}
 
 	async handleTerminalOperation(terminalOperation: "continue" | "abort") {
@@ -1009,7 +1024,7 @@ export class Task extends EventEmitter<ClineEvents> {
 				"mistake_limit_reached",
 				this.api.getModel().id.includes("claude")
 					? `This may indicate a failure in his thought process or inability to use a tool properly, which can be mitigated with some user guidance (e.g. "Try breaking down the task into smaller steps").`
-					: "Roo Code uses complex prompts and iterative task execution that may be challenging for less capable models. For best results, it's recommended to use Claude 3.7 Sonnet for its advanced agentic coding capabilities.",
+					: "Shenma uses complex prompts and iterative task execution that may be challenging for less capable models. For best results, it's recommended to use Claude 3.7 Sonnet for its advanced agentic coding capabilities.",
 			)
 
 			if (response === "messageResponse") {
@@ -1077,6 +1092,15 @@ export class Task extends EventEmitter<ClineEvents> {
 		// results.
 		const finalUserContent = [...parsedUserContent, { type: "text" as const, text: environmentDetails }]
 
+		// Add language preference to user content if available
+		const { language } = (await this.providerRef.deref()?.getState()) ?? {}
+		if (language) {
+				const languageName = isLanguage(language) ? LANGUAGES[language] : language
+				await this.addToApiConversationHistory({
+						role: "user",
+						content: `\nPlease also follow these instructions in all of your responses if relevant to my query. No need to acknowledge these instructions directly in your response.\n\nAlways respond in ${languageName}\nYou must use a tool in your response! \n# Reminder: Instructions for Tool Use\n\nTool uses are formatted using XML-style tags. The tool name is enclosed in opening and closing tags, and each parameter is similarly enclosed within its own set of tags. Here's the structure:\n\n<tool_name>\n<parameter1_name>value1</parameter1_name>\n<parameter2_name>value2</parameter2_name>\n...\n</tool_name>\n\nFor example:\n\n<attempt_completion>\n<result>\nI have completed the task...\n</result>\n</attempt_completion>\n\nAlways adhere to this format for all tool uses to ensure proper parsing and execution.\n\n# Next Steps\n\nIf you have completed the user's task, use the attempt_completion tool. \nIf you require additional information from the user, use the ask_followup_question tool. \nOtherwise, if you have not completed the task and do not need additional information, then proceed with the next step of the task.\nWhen creating multiple folders using the command, please use mkidr - p path1; mkdir -p path2.\n(This is an automated message, so do not respond to it conversationally.)`,
+				})
+		}
 		await this.addToApiConversationHistory({ role: "user", content: finalUserContent })
 		telemetryService.captureConversationMessage(this.taskId, "user")
 
@@ -1183,7 +1207,6 @@ export class Task extends EventEmitter<ClineEvents> {
 			this.presentAssistantMessageHasPendingUpdates = false
 
 			await this.diffViewProvider.reset()
-
 			// Yields only if the first chunk is successful, otherwise will
 			// allow the user to retry the request (most likely due to rate
 			// limit error, which gets thrown on the first chunk).
@@ -1194,6 +1217,8 @@ export class Task extends EventEmitter<ClineEvents> {
 
 			try {
 				for await (const chunk of stream) {
+					this.api?.setChatType?.("system")
+
 					if (!chunk) {
 						// Sometimes chunk is undefined, no idea that can cause
 						// it, but this workaround seems to fix it.
@@ -1470,7 +1495,6 @@ export class Task extends EventEmitter<ClineEvents> {
 		} = (await this.providerRef.deref()?.getState()) ?? {}
 
 		let rateLimitDelay = 0
-
 		// Only apply rate limiting if this isn't the first request
 		if (this.lastApiRequestTime) {
 			const now = Date.now()
@@ -1559,6 +1583,7 @@ export class Task extends EventEmitter<ClineEvents> {
 			}
 		}
 
+		this.api?.setTaskId?.(this.taskId)
 		const stream = this.api.createMessage(systemPrompt, cleanConversationHistory)
 		const iterator = stream[Symbol.asyncIterator]()
 
@@ -1572,15 +1597,7 @@ export class Task extends EventEmitter<ClineEvents> {
 			this.isWaitingForFirstChunk = false
 			// note that this api_req_failed ask is unique in that we only present this option if the api hasn't streamed any content yet (ie it fails on the first chunk due), as it would allow them to hit a retry button. However if the api failed mid-stream, it could be in any arbitrary state where some tools may have executed, so that error is handled differently and requires cancelling the task entirely.
 			if (autoApprovalEnabled && alwaysApproveResubmit) {
-				let errorMsg
-
-				if (error.error?.metadata?.raw) {
-					errorMsg = JSON.stringify(error.error.metadata.raw, null, 2)
-				} else if (error.message) {
-					errorMsg = error.message
-				} else {
-					errorMsg = "Unknown error"
-				}
+				const errorMsg = getTaskRequestError(error, this.taskId, this.instanceId)
 
 				const baseDelay = requestDelaySeconds || 5
 				let exponentialDelay = Math.ceil(baseDelay * Math.pow(2, retryAttempt))
@@ -1621,6 +1638,7 @@ export class Task extends EventEmitter<ClineEvents> {
 
 				// Delegate generator output from the recursive call with
 				// incremented retry count.
+				this.api?.setChatType?.("system")
 				yield* this.attemptApiRequest(retryAttempt + 1)
 
 				return
@@ -1639,6 +1657,7 @@ export class Task extends EventEmitter<ClineEvents> {
 				await this.say("api_req_retried")
 
 				// Delegate generator output from the recursive call.
+				this.api?.setChatType?.("system")
 				yield* this.attemptApiRequest()
 				return
 			}
@@ -1704,4 +1723,36 @@ export class Task extends EventEmitter<ClineEvents> {
 	public get cwd() {
 		return this.workspacePath
 	}
+}
+
+function getTaskRequestError(error: any, taskId: string, instanceId: string) {
+	if (error.error?.metadata?.raw) {
+		return JSON.stringify(error.error.metadata.raw, null, 2)
+	}
+
+	const unknownError = { status: t("apiErrors:status.unknown"), solution: t("apiErrors:solution.unknown") }
+
+	if (error?.headers && error.headers["content-type"].includes("text/")) {
+		const defaultApiErrors = {
+			401: { status: t("apiErrors:status.401"), solution: t("apiErrors:solution.401") },
+			400: { status: t("apiErrors:status.400"), solution: t("apiErrors:solution.400") },
+			403: { status: t("apiErrors:status.403"), solution: t("apiErrors:solution.403") },
+			404: { status: t("apiErrors:status.404"), solution: t("apiErrors:solution.404") },
+			429: { status: t("apiErrors:status.429"), solution: t("apiErrors:solution.429") },
+			500: { status: t("apiErrors:status.500"), solution: t("apiErrors:solution.500") },
+			502: { status: t("apiErrors:status.502"), solution: t("apiErrors:solution.502") },
+			503: { status: t("apiErrors:status.503"), solution: t("apiErrors:solution.503") },
+			504: { status: t("apiErrors:status.504"), solution: t("apiErrors:solution.504") },
+		} as Record<number | string, { status: string; solution: string }>
+
+		const _err = defaultApiErrors[error.status] || unknownError
+
+		console.log(`[Shenma#apiErrors] task ${taskId}.${instanceId} Raw Error: `, error.message)
+
+		return `${t("apiErrors:request.http_code")}\n\n${error.status}\n\n${t("apiErrors:request.error_details")}\n\n${_err.status}\n\n${t("apiErrors:request.solution")}\n\n${_err.solution}`
+	} else if (!error.message) {
+		return `${t("apiErrors:request.http_code")}\n\n${error.status}\n\n${t("apiErrors:request.error_details")}\n\n${unknownError.status}\n\n${t("apiErrors:request.solution")}\n\n${unknownError.solution}`
+	}
+
+	return error.message
 }

@@ -1,5 +1,27 @@
 # Shenma Change Log
 
+## [1.4.4]
+- Add qwen25-vl-32b model info to support imege input
+- Code optimization
+- Fix known issues
+
+## [1.4.3]
+- Add clearHistory method for task history cleanup when reset extension
+- Fix known issues
+
+## [1.4.2]
+- Update zgsm provider and error handling improvements
+- Update vscode engine requirement to ^1.86.2
+
+## [1.4.1]
+- Update svg and add re-login button
+- Adds onboarding messages and new settings descriptions
+- Fix On-Premise model info
+- Add window reload check for command availability
+
+## [1.4.0]
+- Sync upstream changes
+
 ## [1.3.3]
 - Fixed the issue of exceeding file read limits under specific scenarios
 - Added support for configuring custom OAuth2 endpoints

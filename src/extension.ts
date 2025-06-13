@@ -52,6 +52,18 @@ let extensionContext: vscode.ExtensionContext
 // This method is called when your extension is activated.
 // Your extension is activated the very first time the command is executed.
 export async function activate(context: vscode.ExtensionContext) {
+	const hasReloaded = context.globalState.get<boolean>("hasReloadedOnUpgrade") ?? false
+	const allCommands = await vscode.commands.getCommands(true)
+
+	if (!allCommands.includes(getCommand("SidebarProvider.focus"))) {
+		await context.globalState.update("hasReloadedOnUpgrade", true)
+
+		!hasReloaded && (await vscode.commands.executeCommand("workbench.action.reloadWindow"))
+		return
+	}
+
+	await context.globalState.update("hasReloadedOnUpgrade", false)
+
 	extensionContext = context
 	outputChannel = vscode.window.createOutputChannel(Package.outputChannel)
 	context.subscriptions.push(outputChannel)
@@ -60,8 +72,8 @@ export async function activate(context: vscode.ExtensionContext) {
 	// Migrate old settings to new
 	await migrateSettings(context, outputChannel)
 
-	// Initialize telemetry service after environment variables are loaded.
-	telemetryService.initialize()
+	// // Initialize telemetry service after environment variables are loaded.
+	// telemetryService.initialize()
 
 	// Initialize i18n for internationalization support
 	initializeI18n(context.globalState.get("language") ?? formatLanguage(await defaultLang()))

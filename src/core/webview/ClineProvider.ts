@@ -662,7 +662,7 @@ export class ClineProvider extends EventEmitter<ClineProviderEvents> implements 
 						window.AUDIO_BASE_URI = "${audioUri}"
 						window.MATERIAL_ICONS_BASE_URI = "${materialIconsUri}"
 					</script>
-					<title>Roo Code</title>
+					<title>Shenma</title>
 				</head>
 				<body>
 					<div id="root"></div>
@@ -758,7 +758,7 @@ export class ClineProvider extends EventEmitter<ClineProviderEvents> implements 
 				window.AUDIO_BASE_URI = "${audioUri}"
 				window.MATERIAL_ICONS_BASE_URI = "${materialIconsUri}"
 			</script>
-            <title>Roo Code</title>
+            <title>Shenma</title>
           </head>
           <body>
             <noscript>You need to enable JavaScript to run this app.</noscript>
@@ -1620,12 +1620,25 @@ export class ClineProvider extends EventEmitter<ClineProviderEvents> implements 
 			return
 		}
 
+		await this.clearHistory()
 		await this.contextProxy.resetAllState()
 		await this.providerSettingsManager.resetAllConfigs()
 		await this.customModesManager.resetCustomModes()
 		await this.removeClineFromStack()
 		await this.postStateToWebview()
 		await this.postMessageToWebview({ type: "action", action: "chatButtonClicked" })
+	}
+
+	async clearHistory() {
+		try {
+			const history = this.getGlobalState("taskHistory") ?? []
+
+			for (const historyItem of history) {
+				await this.deleteTaskWithId(historyItem.id)
+			}
+		} catch (error) {
+			this.log(error.message)
+		}
 	}
 
 	// logging
