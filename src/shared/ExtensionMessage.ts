@@ -448,6 +448,9 @@ export interface ClineSayTool {
 	args?: string
 	source?: string
 	description?: string
+	columnNumber?: number
+	startColumn?: number
+	endColumn?: number
 }
 
 // Must keep in sync with system prompt.
